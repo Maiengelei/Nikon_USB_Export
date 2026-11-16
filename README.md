@@ -1,23 +1,21 @@
-# Nikon USB Export 0.3.0（macOS）
+# Nikon USB Export（共享核心）
 
 ## 功能
 
-- 通过 USB（MTP/PTP）浏览 Nikon Z 8 的存储卡、拍摄目录和缩略图。应用根据机身卷标和存储标识识别卡槽，识别失败时可手动关联。
-- 按所选照片、目录（含子目录）、整卡或双卡导出 NEF、JPEG、HEIF 和 TIFF 原片。目标路径保留卡号和机内目录，例如 `卡2/DCIM/100NCZ_8/DSC_0001.NEF`。
-- 目标文件同名且字节数相同时跳过。大小不同时保留已有文件，并记录冲突路径和两侧的字节数。
+macOS 和 iOS 共用的 Swift 包，通过 USB/PTP 读取 Nikon Z 8 的存储信息、目录、缩略图和原片。导出支持所选照片、目录、整卡或双卡，按卡号保留机内路径。同名且字节数相同的文件会跳过，大小不同则记录冲突。
 
 ## 构建
 
-使用完整的 Xcode 构建，应用最低支持 macOS 14。将 SDK 原包放在 `Dependencies/NikonRemoteSDK/2.1.0/S-SDKZ-210BF-ALLIN.zip`，在仓库根目录执行以下命令。
+使用完整 Xcode 和 Swift 5.9 或更新版本的工具链。部署目标为 macOS 14 和 iOS 17。在 Mac 上从仓库根目录构建并运行离线测试。
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-xcodebuild -project NikonUSBExport.xcodeproj -scheme NikonUSBExport \
-  -configuration Release -derivedDataPath build build
+swift build
+swift test
 ```
 
-产物位于 `build/Build/Products/Release/Nikon USB Export.app`。在 Xcode 中选择 `NikonUSBExport` scheme，按 ⌘U 运行测试。
+构建完整应用时，macOS 工程位于 `Nikon_USB_Export_MAC` 分支，iPhone 和 iPad 工程位于 `Nikon_USB_Export_IOS` 分支。
 
 ## 第三方组件
 
-**Nikon Remote SDK 2.1.0** 提供 MAID 接口，供 `NikonSDKService` 识别机身和读取存储标识。构建脚本校验原包的 SHA-256，将 `TypeCommon Module.bundle`、`Royalmile.framework`、`libNkPTPDriver2.dylib` 和配套配置嵌入 XPC 服务。原片通过 macOS 的 ImageCaptureCore 读取。[尼康 SDK 申请与下载](https://sdk.nikonimaging.com/apply/guide)
+无。USB 通信使用 Apple 的 ImageCaptureCore。

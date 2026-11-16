@@ -1,6 +1,6 @@
 import Foundation
 import ImageCaptureCore
-import SwiftUI
+import Combine
 
 @MainActor
 protocol PTPCommandDevice: AnyObject {
@@ -142,7 +142,16 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
     @Published private(set) var report: ExportProgress?
     @Published private(set) var scanNotes = [String]()
     @Published var destination: URL?
-    private let browser = ICDeviceBrowser()
+    private let browser: ICDeviceBrowser
+    private let inspectSDK: (@MainActor (Bool) async throws -> NikonDiscovery)?
+
+    init(browser: ICDeviceBrowser = ICDeviceBrowser(),
+         inspectSDK: (@MainActor (Bool) async throws -> NikonDiscovery)? = nil) {
+        self.browser = browser
+        self.inspectSDK = inspectSDK
+        super.init()
+    }
+
     private var camera: ICCameraDevice?
     private var source: USBSource?
     private var transferDevice: ICCameraDevice?
@@ -159,6 +168,10 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
         guard !browser.isBrowsing else { return }
         browser.delegate = self
         browser.browsedDeviceTypeMask = ICDeviceTypeMask(rawValue: ICDeviceTypeMask.camera.rawValue | ICDeviceLocationTypeMask.local.rawValue)!
+        #if os(iOS)
+        enumeratedLocalDevices = true // iOS announces devices through didAdd, without a final enumeration callback.
+        #endif
+        status = "等待 USB 连接"
         browser.start()
     }
 
@@ -172,12 +185,15 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
         }
     }
 
+    #if os(macOS)
     nonisolated func deviceBrowserDidEnumerateLocalDevices(_ browser: ICDeviceBrowser) {
         Task { @MainActor in
             enumeratedLocalDevices = true
             updateDevices()
         }
     }
+
+    #endif
 
     nonisolated func deviceBrowser(_ browser: ICDeviceBrowser, didRemove device: ICDevice, moreGoing: Bool) {
         Task { @MainActor in
@@ -198,7 +214,7 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
     }
 
     private func updateDevices() {
-        guard enumeratedLocalDevices else { return }
+        guard browser.isBrowsing, enumeratedLocalDevices else { return }
         let candidates = usbCandidates
         guard candidates.count == 1, let device = candidates.first else {
             if camera != nil { detach() }
@@ -206,7 +222,7 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
                 clearCatalog("检测到多台 Z8，请只连接需要导出的机身。")
                 needsInitialDiscovery = true
             }
-            else if needsInitialDiscovery {
+            else if needsInitialDiscovery && inspectSDK != nil {
                 needsInitialDiscovery = false
                 // The USB object can be posted just after local enumeration.
                 // Give it a chance to start the full scan before a discovery-only call.
@@ -224,6 +240,15 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
         sessionWasReset = false
         clearCatalog("已发现 USB 设备，正在识别机身…")
         if exporting { needsInitialDiscovery = true } else { refresh() }
+    }
+
+    func stop() {
+        guard browser.isBrowsing else { return }
+        browser.delegate = nil
+        browser.stop()
+        enumeratedLocalDevices = false
+        needsInitialDiscovery = true
+        detach()
     }
 
     private func observeChanges(on device: ICCameraDevice, generation snapshot: UUID) {
@@ -339,9 +364,9 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
         guard canRefresh else { return }
         needsInitialDiscovery = false
         let candidate = camera
-        clearCatalog("正在通过尼康 SDK 识别 Z8…")
+        clearCatalog(inspectSDK == nil ? "正在通过 USB 识别 Z8…" : "正在通过尼康 SDK 识别 Z8…")
         connected = false
-        scanNotes = ["Nikon Remote SDK 2.1.0 · " + Date().formatted()]
+        scanNotes = [(inspectSDK == nil ? "ImageCaptureCore · " : "Nikon Remote SDK 2.1.0 · ") + Date().formatted()]
         let previous = scanTask
         let current = generation
         scanning = true
@@ -353,24 +378,31 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
                 try Task.checkCancellation()
                 try await closeTransferSession()
                 guard let device = candidate else {
-                    let names = try await NikonSDKClient.inspect(readStorage: false).names
-                    guard generation == current else { return }
-                    status = names.isEmpty ? "尼康 SDK 已就绪，等待通过 USB 连接 Z8。" : "尼康 SDK 已发现设备，等待 Z8 的 USB 数据连接。"
-                    scanNotes.append("SDK EnumDevices · " + (names.isEmpty ? "未发现设备" : names.joined(separator: "、")))
+                    if let inspectSDK {
+                        let names = try await inspectSDK(false).names
+                        guard generation == current else { return }
+                        status = names.isEmpty ? "尼康 SDK 已就绪，等待通过 USB 连接 Z8。" : "尼康 SDK 已发现设备，等待 Z8 的 USB 数据连接。"
+                        scanNotes.append("SDK EnumDevices · " + (names.isEmpty ? "未发现设备" : names.joined(separator: "、")))
+                    } else {
+                        status = "等待通过 USB 连接 Nikon Z8。"
+                    }
                     scanning = false
                     return
                 }
                 try checkEndpoint(device, generation: current)
-                let sdk = try await NikonSDKClient.inspect(readStorage: true)
-                try checkEndpoint(device, generation: current)
-                guard sdk.names.count == 1, let interface = sdk.interfaceName else {
-                    throw ExportError("尼康 SDK 未确认当前 USB 机身。")
-                }
-                let stores = sdk.stores
-                scanNotes.append("SDK 已连接 " + sdk.names[0] + " · " + interface)
-                for store in stores {
-                    let detail = store.error ?? "可访问"
-                    scanNotes.append(String(format: "SDK 存储 0x%08X · ", store.id) + detail)
+                var stores: [SDKStorageRecord]?
+                if let inspectSDK {
+                    let sdk = try await inspectSDK(true)
+                    try checkEndpoint(device, generation: current)
+                    guard sdk.names.count == 1, let interface = sdk.interfaceName else {
+                        throw ExportError("尼康 SDK 未确认当前 USB 机身。")
+                    }
+                    stores = sdk.stores
+                    scanNotes.append("SDK 已连接 " + sdk.names[0] + " · " + interface)
+                    for store in sdk.stores {
+                        let detail = store.error ?? "可访问"
+                        scanNotes.append(String(format: "SDK 存储 0x%08X · ", store.id) + detail)
+                    }
                 }
                 status = "正在按 Z8 命令规范读取目录…"
                 transferDevice = device
@@ -390,7 +422,7 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
         }
     }
 
-    func readCatalog(with source: USBSource, sdkStores: [SDKStorageRecord]) async throws {
+    func readCatalog(with source: USBSource, sdkStores: [SDKStorageRecord]?) async throws {
         let current = generation
         connected = true
         self.source = source

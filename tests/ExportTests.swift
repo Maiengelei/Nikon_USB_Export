@@ -195,12 +195,6 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(items.allSatisfy { $0.slot == .two && $0.entry.object.storage == source.sd })
     }
 
-    func testEmbeddedSDKLoadsAndEnumeratesWithoutOpeningACamera() async throws {
-        let result = try await NikonSDKClient.inspect(readStorage: false)
-        XCTAssertTrue(result.stores.isEmpty)
-        XCTAssertNil(result.interfaceName)
-    }
-
     @MainActor func testFourScopesAndNestedCardRootPaths() async throws {
         let source = CameraFixture()
         let catalog = try await source.confirmedCatalog()
