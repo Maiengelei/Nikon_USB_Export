@@ -11,6 +11,8 @@ enum ReadCommand: UInt16 {
     case objectInfo = 0x1008
     case object = 0x1009
     case thumbnail = 0x100a
+    case events = 0x941c
+    case objectPropList = 0x9805
     var name: String {
         switch self {
         case .storageIDs: return "GetVendorStorageIDs"
@@ -19,6 +21,8 @@ enum ReadCommand: UInt16 {
         case .objectInfo: return "GetObjectInfo"
         case .object: return "GetObject"
         case .thumbnail: return "GetThumb"
+        case .events: return "GetEventEx"
+        case .objectPropList: return "GetObjectPropList"
         }
     }
 
@@ -114,6 +118,44 @@ struct PTPBytes {
     }
 }
 
+struct CatalogEvent: Equatable {
+    let code: UInt16
+    let parameter: UInt32?
+
+    var affectsCatalog: Bool {
+        [0x4002, 0x4003, 0x4004, 0x4005, 0x4007, 0x400b, 0x400c, 0x400e].contains(code)
+    }
+
+    static func interrupt(_ data: Data) -> Self? {
+        var reader = PTPBytes(data: data)
+        guard data.count >= 12, let length = try? reader.number(UInt32.self), Int(length) == data.count,
+              (try? reader.number(UInt16.self)) == 4, let code = try? reader.number(UInt16.self) else { return nil }
+        reader.offset = 12
+        return Self(code: code, parameter: try? reader.number(UInt32.self))
+    }
+
+    // GetEventEx uses a packed list, unlike the interrupt endpoint's USB container.
+    static func firstChange(in data: Data) throws -> Self? {
+        var reader = PTPBytes(data: data)
+        let count = Int(try reader.number(UInt32.self))
+        guard count <= 2048 else { throw ExportError("相机事件数量异常。") }
+        var change: Self?
+        for _ in 0..<count {
+            let code = try reader.number(UInt16.self)
+            let parameters = Int(try reader.number(UInt16.self))
+            var first: UInt32?
+            for index in 0..<parameters {
+                let value = try reader.number(UInt32.self)
+                if index == 0 { first = value }
+            }
+            let event = Self(code: code, parameter: first)
+            if event.affectsCatalog && (change == nil || code == 0x400b) { change = event }
+        }
+        guard reader.offset == data.count else { throw ExportError("相机事件列表长度错误。") }
+        return change
+    }
+}
+
 @MainActor
 protocol PTPReading: AnyObject {
     func request(_ command: ReadCommand, _ parameters: [UInt32]) async throws -> Data
@@ -200,21 +242,80 @@ struct CameraReader {
         let handles = try await dataset(.objectHandles, [id, 0, 0], decode: PTPBytes.identifiers)
         let roots = try await dataset(.objectHandles, [id, 0, .max], decode: PTPBytes.identifiers)
         evidence("对象 \(handles.count) 个，根级对象 \(roots.count) 个")
-        var objects = [CameraObject]()
-        for (offset, handle) in handles.enumerated() {
-            if offset.isMultiple(of: 25) { progress("正在读取目录 · \(offset + 1) / \(handles.count)") }
-            let object = try await dataset(.objectInfo, [handle]) { try PTPBytes.object($0, id: handle) }
-            objects.append(object)
+        let start = ProcessInfo.processInfo.systemUptime
+        func makeStore(_ objects: [CameraObject]) throws -> Storage {
+            try Storage(id: id, description: description, label: label, capacity: capacity,
+                        objects: objects, roots: Set(roots))
         }
         let store: Storage
-        do {
-            store = try Storage(id: id, description: description, label: label, capacity: capacity,
-                                objects: objects, roots: Set(roots))
-        } catch { throw failure("校验目录", error) }
+        if !roots.isEmpty, handles.count > max(16, roots.count * 5),
+           let batch = try await batchObjects(handles: handles, roots: roots, storage: id),
+           let validated = try? makeStore(batch) {
+            store = validated
+            evidence("批量元数据 · \(roots.count * 5) 次 GetObjectPropList")
+        } else {
+            var objects = [CameraObject]()
+            objects.reserveCapacity(handles.count)
+            for (offset, handle) in handles.enumerated() {
+                if offset.isMultiple(of: 25) { progress("正在读取目录 · \(offset + 1) / \(handles.count)") }
+                let object = try await dataset(.objectInfo, [handle]) { try PTPBytes.object($0, id: handle) }
+                objects.append(object)
+            }
+            do { store = try makeStore(objects) } catch { throw failure("校验目录", error) }
+            evidence("逐对象元数据 · \(handles.count) 次 GetObjectInfo")
+        }
+        evidence(String(format: "元数据与目录校验 %.3f 秒", ProcessInfo.processInfo.systemUptime - start))
         let photos = store.entries.filter { $0.object.isPhoto }
         evidence("目录 \(store.entries.count - photos.count) 个，照片 \(photos.count) 张")
         for photo in photos.prefix(2) { evidence("样本 " + photo.path.joined(separator: "/")) }
         return store
+    }
+
+    private enum BatchError: Error { case incomplete }
+
+    // Ask for one typed column at a time, limited to a root on this card. Only
+    // accept the result when all five columns cover exactly the enumerated handles.
+    private func batchObjects(handles: [UInt32], roots: [UInt32], storage: UInt32) async throws -> [CameraObject]? {
+        func column<T>(_ property: UInt16, type: UInt16, root: UInt32,
+                       decode: (inout PTPBytes) throws -> T) async throws -> [UInt32: T] {
+            try Task.checkCancellation()
+            let data = try await source.request(.objectPropList, [root, 0, UInt32(property), 0, .max])
+            var reader = PTPBytes(data: data)
+            do {
+                let count = Int(try reader.number(UInt32.self))
+                guard count <= handles.count else { throw BatchError.incomplete }
+                var values = [UInt32: T]()
+                for _ in 0..<count {
+                    let id = try reader.number(UInt32.self)
+                    guard try reader.number(UInt16.self) == property, try reader.number(UInt16.self) == type,
+                          values.updateValue(try decode(&reader), forKey: id) == nil else { throw BatchError.incomplete }
+                }
+                guard reader.offset == data.count else { throw BatchError.incomplete }
+                return values
+            } catch { throw BatchError.incomplete }
+        }
+        var objects = [UInt32: CameraObject]()
+        do {
+            for root in roots {
+                let stores = try await column(0xdc01, type: 6, root: root) { try $0.number(UInt32.self) }
+                let formats = try await column(0xdc02, type: 4, root: root) { try $0.number(UInt16.self) }
+                let sizes = try await column(0xdc04, type: 8, root: root) { try $0.number(UInt64.self) }
+                let names = try await column(0xdc07, type: 0xffff, root: root) { try $0.string() }
+                let parents = try await column(0xdc0b, type: 6, root: root) { try $0.number(UInt32.self) }
+                guard [formats.count, sizes.count, names.count, parents.count].allSatisfy({ $0 == stores.count })
+                else { return nil }
+                for (id, store) in stores {
+                    guard store == storage, objects[id] == nil, let format = formats[id], let size = sizes[id],
+                          let name = names[id], let parent = parents[id] else { return nil }
+                    objects[id] = CameraObject(id: id, storage: store, parent: parent, format: format, name: name,
+                                               size: UInt32(clamping: size))
+                }
+            }
+        } catch is BatchError { return nil }
+        catch let error as PTPResponseError where error.isStorageSpecific ||
+            [0x2005, 0x2006, 0x2014, 0x201d, 0xa801, 0xa802, 0xa805, 0xa807, 0xa808, 0xa80a].contains(error.code) { return nil }
+        guard objects.count == handles.count, handles.allSatisfy({ objects[$0] != nil }) else { return nil }
+        return handles.compactMap { objects[$0] }
     }
 
     private func infoFor(_ handle: UInt32) async throws -> CameraObject {

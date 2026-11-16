@@ -166,7 +166,10 @@ struct Catalog {
     }
 
     mutating func confirm(_ slot: Slot?, for id: UInt32) throws {
-        guard stores.contains(where: { $0.id == id }) else { throw ExportError("存储已断开。") }
+        guard let store = stores.first(where: { $0.id == id }) else { throw ExportError("存储已断开。") }
+        if let reported = store.reportedSlot, slot != reported {
+            throw ExportError("机身已确认此存储为\(reported.title)，无法更改关联。")
+        }
         if let slot, failedStores.contains(where: { $0.slot == slot }) {
             throw ExportError("\(slot.title) 本次读取失败，不能关联其他存储。")
         }

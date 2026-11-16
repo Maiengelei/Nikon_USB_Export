@@ -124,15 +124,17 @@ private struct ExportWindow: View {
                             .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                     Spacer()
-                    Menu(slot == nil ? "核对卡槽" : "更改关联") {
-                        ForEach(Slot.allCases) { choice in
-                            Button("\(choice.title) · \(choice.medium)") {
-                                confirmation = SlotConfirmation(id: store.id, slot: choice)
+                    if store.reportedSlot == nil {
+                        Menu(slot == nil ? "核对卡槽" : "更改关联") {
+                            ForEach(Slot.allCases) { choice in
+                                Button("\(choice.title) · \(choice.medium)") {
+                                    confirmation = SlotConfirmation(id: store.id, slot: choice)
+                                }
+                                .disabled(model.catalog.slots.values.contains(choice) || model.catalog.failedStores.contains { $0.slot == choice })
                             }
-                            .disabled(model.catalog.slots.values.contains(choice) || model.catalog.failedStores.contains { $0.slot == choice })
-                        }
-                        if slot != nil { Button("解除关联") { model.confirm(nil, id: store.id) } }
-                    }.fixedSize().disabled(model.exporting)
+                            if slot != nil { Button("解除关联") { model.confirm(nil, id: store.id) } }
+                        }.fixedSize().disabled(model.exporting)
+                    }
                 }.padding([.horizontal, .top], 18)
                 HStack {
                     Button {
@@ -238,8 +240,14 @@ private struct ExportWindow: View {
                     }
                 }
                 Text(model.exporting ? report.current : report.summary)
-                    .font(.caption).foregroundStyle(report.failure == nil ? Color.secondary : .red)
+                    .font(.caption).foregroundStyle(report.failure != nil ? Color.red : (report.conflicts.isEmpty ? .secondary : .orange))
                     .lineLimit(3).textSelection(.enabled)
+                if !report.conflicts.isEmpty {
+                    Button("复制同名冲突清单（\(report.conflicts.count)）") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(report.conflicts.joined(separator: "\n"), forType: .string)
+                    }
+                }
             }
         }.padding(16)
     }

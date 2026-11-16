@@ -26,6 +26,7 @@ final class USBSource: NSObject, PTPReading {
     private var operation: ReadCommand?
     private var timeout: Task<Void, Never>?
     private var invalid: Error?
+    var onSessionFailure: ((USBSource, Error) -> Void)?
 
     init(camera: PTPCommandDevice, timeoutNanoseconds: UInt64 = 120_000_000_000) {
         self.camera = camera
@@ -33,8 +34,14 @@ final class USBSource: NSObject, PTPReading {
     }
 
     func invalidate(_ error: Error) {
+        guard invalid == nil else { return }
         invalid = error
         finish(.failure(error))
+    }
+
+    private func failSession(_ error: Error) {
+        invalidate(error)
+        onSessionFailure?(self, error)
     }
 
     func request(_ command: ReadCommand, _ parameters: [UInt32]) async throws -> Data {
@@ -61,7 +68,11 @@ final class USBSource: NSObject, PTPReading {
 
     private func send(_ command: ReadCommand, _ parameters: [UInt32]) async throws -> Data {
         if let invalid { throw invalid }
-        guard pending == nil, camera.hasOpenSession else { throw ExportError("相机会话不可用，请重新连接。") }
+        guard pending == nil, camera.hasOpenSession else {
+            let error = ExportError("相机会话不可用。")
+            failSession(error)
+            throw error
+        }
         transaction &+= 1
         let token = transaction
         return try await withCheckedThrowingContinuation { continuation in
@@ -70,7 +81,7 @@ final class USBSource: NSObject, PTPReading {
             timeout = Task { [weak self, timeoutNanoseconds] in
                 try? await Task.sleep(nanoseconds: timeoutNanoseconds)
                 guard !Task.isCancelled, let self, self.transaction == token else { return }
-                self.invalidate(ExportError("等待相机读取超时，请重新连接。"))
+                self.failSession(ExportError("等待相机读取超时，请刷新以重新连接。"))
             }
             camera.sendReadPacket(command.packet(transaction: token, parameters: parameters), transaction: token, delegate: self)
         }
@@ -95,7 +106,7 @@ final class USBSource: NSObject, PTPReading {
                     if (error.domain == ICErrorDomain && error.code == ICReturn.Code.communicationTimedOut.rawValue)
                         || (error.domain == NSURLErrorDomain && error.code == NSURLErrorTimedOut)
                         || (error.domain == NSPOSIXErrorDomain && error.code == Int(ETIMEDOUT)) {
-                        invalidate(ExportError("相机读取超时，请重新连接。\(error.localizedDescription)"))
+                        failSession(ExportError("相机读取超时，请刷新以重新连接。\(error.localizedDescription)"))
                         return
                     }
                     throw error
@@ -103,7 +114,9 @@ final class USBSource: NSObject, PTPReading {
                 try PTPBytes.checkResponse(receipt ?? Data(), to: operation)
                 // The reader validates the dataset in the scope of its command and storage.
                 finish(.success(payload ?? Data()))
-            } catch { finish(.failure(error)) }
+            } catch let refusal as PTPResponseError where ![0x2003, 0x2004].contains(refusal.code) {
+                finish(.failure(refusal))
+            } catch { failSession(error) }
         }
     }
 
@@ -138,6 +151,7 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
     private var sessionWasReset = false
     private var thumbnails: CatalogThumbnails?
     private var scanTask: Task<Void, Never>?
+    private var eventTask: Task<Void, Never>?
     private var exportTask: Task<Void, Never>?
     private var generation = UUID()
 
@@ -209,37 +223,62 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
         camera = device
         sessionWasReset = false
         clearCatalog("已发现 USB 设备，正在识别机身…")
-        refresh()
+        if exporting { needsInitialDiscovery = true } else { refresh() }
     }
 
-    private func observeChanges(on device: ICCameraDevice) {
-        device.ptpEventHandler = { [weak self, weak device] packet in
-            var header = PTPBytes(data: packet)
-            guard packet.count >= 12, let length = try? header.number(UInt32.self), Int(length) == packet.count,
-                  (try? header.number(UInt16.self)) == 4, let event = try? header.number(UInt16.self),
-                  [0x4002, 0x4003, 0x4004, 0x4005, 0x4007, 0x400b, 0x400c, 0x400e].contains(Int(event)) else { return }
-            header.offset = 12
-            let parameter = try? header.number(UInt32.self)
+    private func observeChanges(on device: ICCameraDevice, generation snapshot: UUID) {
+        device.ptpEventHandler = { [weak self] packet in
+            guard let event = CatalogEvent.interrupt(packet), event.affectsCatalog else { return }
             Task { @MainActor in
-                guard let self, let device, self.camera === device else { return }
-                let detail = String(format: "PTP 事件 0x%04X", event)
-                    + (parameter.map { String(format: " 参数 0x%08X", $0) } ?? "")
-                if self.scanNotes.last != detail { self.scanNotes.append(detail) }
-                if event == 0x400b {
-                    self.sessionWasReset = true
-                    let message = "相机会话已重置，请重新连接。"
-                    self.source?.invalidate(ExportError(message))
-                    self.clearCatalog(message)
-                    return
-                }
-                guard !self.sessionWasReset else { return }
-                // Free space or the volume label may have changed. Revoke the
-                // previous slot mapping without diagnosing media damage.
-                let message = event == 0x400c
-                    ? "存储信息已变化，请刷新并重新核对卡槽。"
-                    : "相机内容已变化，请刷新并重新核对卡槽。"
-                self.clearCatalog(message)
+                guard let self, self.generation == snapshot else { return }
+                self.apply(event)
             }
+        }
+    }
+
+    private func apply(_ event: CatalogEvent) {
+        let detail = String(format: "PTP 事件 0x%04X", event.code)
+            + (event.parameter.map { String(format: " 参数 0x%08X", $0) } ?? "")
+        scanNotes.append(detail)
+        if event.code == 0x400b {
+            sessionWasReset = true
+            connected = false
+            let message = "相机会话已重置，请重新连接。"
+            source?.invalidate(ExportError(message))
+            clearCatalog(message)
+        } else {
+            clearCatalog("相机内容或存储信息已变化，请刷新并重新核对卡槽。")
+        }
+    }
+
+    private func checkEvents(_ reader: USBSource, generation snapshot: UUID) async throws {
+        guard generation == snapshot else { throw CancellationError() }
+        do {
+            let data = try await reader.request(.events, [])
+            guard generation == snapshot else { throw CancellationError() }
+            if let change = try CatalogEvent.firstChange(in: data) {
+                apply(change)
+                throw ExportError(status)
+            }
+        } catch {
+            if generation == snapshot && !Task.isCancelled {
+                let message = "无法核对相机变化，请刷新。 " + error.localizedDescription
+                scanNotes.append(message)
+                clearCatalog(message)
+            }
+            throw error
+        }
+    }
+
+    private func monitorEvents(_ reader: USBSource, generation snapshot: UUID) {
+        // In Nikon application mode media changes may only reach the command queue.
+        eventTask = Task {
+            do {
+                while !Task.isCancelled {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    try await checkEvents(reader, generation: snapshot)
+                }
+            } catch { return }
         }
     }
 
@@ -259,6 +298,8 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
 
     private func clearCatalog(_ message: String) {
         generation = UUID()
+        eventTask?.cancel()
+        eventTask = nil
         scanTask?.cancel()
         exportTask?.cancel()
         thumbnails?.cancel()
@@ -338,29 +379,45 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
                 guard device.capabilities.contains(ICDeviceCapability.cameraDeviceCanAcceptPTPCommands.rawValue) else {
                     throw ExportError("相机未开放 PTP 读取，请检查 USB 数据连接模式。")
                 }
-                connected = true
-                observeChanges(on: device)
-                let source = USBSource(camera: device)
-                self.source = source
-                let result = try await CameraReader(source: source).scan(sdkStores: stores, evidence: {
-                    if generation == current { scanNotes.append($0) }
-                }, progress: {
-                    if generation == current { status = $0 }
-                })
-                guard generation == current else { return }
-                thumbnails = CatalogThumbnails(catalog: result, source: source)
-                catalog = result
-                if result.failedStores.isEmpty {
-                    status = result.stores.isEmpty ? "未发现可读取的存储卡。" : "已读取 \(result.stores.count) 个存储"
-                } else {
-                    status = "可读取 \(result.stores.count) 个存储，\(result.failedStores.count) 个读取失败。"
-                }
+                observeChanges(on: device, generation: current)
+                try await readCatalog(with: USBSource(camera: device), sdkStores: stores)
             } catch {
                 guard generation == current else { return }
                 status = error.localizedDescription
                 scanNotes.append("读取中断 · \(status)")
             }
             scanning = false
+        }
+    }
+
+    func readCatalog(with source: USBSource, sdkStores: [SDKStorageRecord]) async throws {
+        let current = generation
+        connected = true
+        self.source = source
+        source.onSessionFailure = { [weak self] failed, error in
+            guard let self, self.source === failed, generation == current else { return }
+            connected = false
+            let message = "USB 会话已失效，请刷新。 " + error.localizedDescription
+            scanNotes.append(message)
+            clearCatalog(message)
+        }
+        // Consume pre-scan history. Check again before publishing this snapshot.
+        _ = try CatalogEvent.firstChange(in: await source.request(.events, []))
+        let result = try await CameraReader(source: source).scan(sdkStores: sdkStores, evidence: {
+            if generation == current { scanNotes.append($0) }
+        }, progress: {
+            if generation == current { status = $0 }
+        })
+        guard generation == current else { return }
+        try await checkEvents(source, generation: current)
+        guard generation == current else { return }
+        thumbnails = CatalogThumbnails(catalog: result, source: source)
+        catalog = result
+        monitorEvents(source, generation: current)
+        if result.failedStores.isEmpty {
+            status = result.stores.isEmpty ? "未发现可读取的存储卡。" : "已读取 \(result.stores.count) 个存储"
+        } else {
+            status = "可读取 \(result.stores.count) 个存储，\(result.failedStores.count) 个读取失败。"
         }
     }
 
@@ -379,19 +436,33 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
     }
 
     func export(_ scope: ExportScope) {
-        guard !exporting, !scanning, let source, let destination else { return }
+        guard connected, !exporting, !scanning, let source, let destination else { return }
         do {
             let items = try catalog.plan(scope)
             thumbnails?.cancel()
             exporting = true
             report = ExportProgress(total: items.count)
+            let snapshot = generation
             exportTask = Task {
+                defer {
+                    exporting = false
+                    if needsInitialDiscovery, camera != nil, canRefresh { refresh() }
+                }
                 let hasAccess = destination.startAccessingSecurityScopedResource()
                 defer { if hasAccess { destination.stopAccessingSecurityScopedResource() } }
                 let reader = CameraReader(source: source)
-                report = await exportPhotos(items, destination: Destination(root: destination),
-                                            read: reader.read, progress: { report = $0 })
-                exporting = false
+                do {
+                    try await checkEvents(source, generation: snapshot)
+                    report = await exportPhotos(items, destination: Destination(root: destination), read: { item in
+                        let bytes = try await reader.read(item)
+                        try await checkEvents(source, generation: snapshot)
+                        return bytes
+                    }, progress: { report = $0 })
+                } catch {
+                    var stopped = ExportProgress(total: items.count)
+                    stopped.failure = error is CancellationError ? status : error.localizedDescription
+                    report = stopped
+                }
             }
         } catch { status = error.localizedDescription }
     }

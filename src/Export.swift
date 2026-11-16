@@ -1,6 +1,11 @@
 import Foundation
 import Darwin
 
+private struct FileSizeConflict: Error {
+    let actual: Int64
+    let expected: Int64
+}
+
 // Walk relative to open directory descriptors. Existing symlinks in the destination
 // must never redirect one card's files into another card or outside the chosen folder.
 struct Destination {
@@ -28,18 +33,20 @@ struct Destination {
         return try work(folder, name)
     }
 
-    private func exists(_ folder: Int32, _ name: String, path: [String]) throws -> Bool {
+    private func exists(_ folder: Int32, _ name: String, path: [String], expectedSize: Int64) throws -> Bool {
         var status = stat()
         if fstatat(folder, name, &status, AT_SYMLINK_NOFOLLOW) == 0 {
             guard status.st_mode & S_IFMT == S_IFREG else { throw ExportError("\(path.joined(separator: "/")) 已被目录或链接占用。") }
+            guard status.st_size == expectedSize else { throw FileSizeConflict(actual: status.st_size, expected: expectedSize) }
             return true
         }
         guard errno == ENOENT else { throw ioError(path) }
         return false
     }
 
-    func alreadyPresent(_ path: [String]) throws -> Bool {
-        try atParent(path) { try exists($0, $1, path: path) }
+    func alreadyPresent(_ path: [String], expectedSize: UInt32) throws -> Bool {
+        guard expectedSize > 0, expectedSize != .max else { throw ExportError("无法核对原片大小。") }
+        return try atParent(path) { try exists($0, $1, path: path, expectedSize: Int64(expectedSize)) }
     }
 
     // Publish only a completely written file. RENAME_EXCL also protects against
@@ -64,7 +71,7 @@ struct Destination {
                 guard fsync(fd) == 0 else { throw ioError(path) }
             }
             if renameatx_np(folder, temp, folder, name, UInt32(RENAME_EXCL)) == 0 { return true }
-            guard errno == EEXIST, try exists(folder, name, path: path) else { throw ioError(path) }
+            guard errno == EEXIST, try exists(folder, name, path: path, expectedSize: Int64(data.count)) else { throw ioError(path) }
             return false
         }
     }
@@ -74,13 +81,16 @@ struct ExportProgress {
     let total: Int
     var written = 0
     var skipped = 0
+    var conflicts = [String]()
     var current = ""
     var failure: String?
-    var processed: Int { written + skipped }
+    var processed: Int { written + skipped + conflicts.count }
     var summary: String {
-        let counts = "已导出 \(written) 张，已有同名文件跳过 \(skipped) 张"
+        var counts = "已导出 \(written) 张，同名同长度跳过 \(skipped) 张"
+        if !conflicts.isEmpty { counts += "，同名长度冲突 \(conflicts.count) 张" }
         if let failure { return "导出中断 · \(counts)\n\(current) · \(failure)" }
         if total == 0 { return "所选范围内没有照片。" }
+        if let first = conflicts.first { return "仍有文件需处理 · \(counts)\n\(first)" }
         if processed == total { return "处理完成 · \(counts)" }
         return counts
     }
@@ -98,7 +108,7 @@ func exportPhotos(_ items: [ExportItem], destination: Destination,
         progress(state)
         do {
             try Task.checkCancellation()
-            let exists = try await Task.detached { try destination.alreadyPresent(path) }.value
+            let exists = try await Task.detached { try destination.alreadyPresent(path, expectedSize: item.entry.object.size) }.value
             if exists {
                 state.skipped += 1
             } else {
@@ -111,6 +121,8 @@ func exportPhotos(_ items: [ExportItem], destination: Destination,
                 if saved { state.written += 1 } else { state.skipped += 1 }
             }
             try Task.checkCancellation()
+        } catch let conflict as FileSizeConflict {
+            state.conflicts.append("\(state.current) · 目标 \(conflict.actual) 字节，原片 \(conflict.expected) 字节")
         } catch {
             state.failure = error is CancellationError ? "相机连接或目录已变化。" : error.localizedDescription
             progress(state)

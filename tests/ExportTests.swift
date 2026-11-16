@@ -56,6 +56,29 @@ private final class CameraFixture: PTPReading {
         commands.append(command)
         if let data = try intercept?(command, parameters) { return data }
         switch command {
+        case .events: return Data(count: 4)
+        case .objectPropList:
+            let root = parameters[0], property = UInt16(parameters[2])
+            let objects = files.values.filter { entry in
+                var current: CameraObject? = entry
+                while let object = current {
+                    if object.id == root { return true }
+                    current = files[object.parent]
+                }
+                return false
+            }.sorted { $0.id < $1.id }
+            return objects.reduce(into: bytes(UInt32(objects.count))) { data, object in
+                data.append(bytes(object.id))
+                data.append(bytes(property))
+                switch property {
+                case 0xdc01: data += bytes(UInt16(6)) + bytes(object.storage)
+                case 0xdc02: data += bytes(UInt16(4)) + bytes(object.format)
+                case 0xdc04: data += bytes(UInt16(8)) + bytes(UInt64(object.size))
+                case 0xdc07: data += bytes(UInt16.max) + string(object.name)
+                case 0xdc0b: data += bytes(UInt16(6)) + bytes(object.parent)
+                default: XCTFail("Unexpected property")
+                }
+            }
         case .storageIDs: return ids(present)
         case .storageInfo:
             return Data(count: 6) + bytes(UInt64(128_000_000_000)) + Data(count: 12) + string("Removable") + string("Z8")
@@ -99,6 +122,7 @@ private final class DeferredUSBDevice: PTPCommandDevice {
     private(set) var tokens = [UInt32]()
     weak var delegate: USBSource?
     var onSend: ((UInt32) -> Void)?
+    var responder: PTPReading?
 
     func sendReadPacket(_ packet: Data, transaction: UInt32, delegate: USBSource) {
         self.delegate = delegate
@@ -106,6 +130,19 @@ private final class DeferredUSBDevice: PTPCommandDevice {
         var bytes = PTPBytes(data: packet, offset: 8)
         XCTAssertEqual(try bytes.number(UInt32.self), transaction)
         onSend?(transaction)
+        if let responder {
+            Task {
+                do {
+                    var reader = PTPBytes(data: packet, offset: 6)
+                    let command = try XCTUnwrap(ReadCommand(rawValue: try reader.number(UInt16.self)))
+                    reader.offset = 12
+                    var params = [UInt32]()
+                    while reader.offset < packet.count { params.append(try reader.number(UInt32.self)) }
+                    let payload = try await responder.request(command, params)
+                    reply(transaction, payload: payload)
+                } catch { reply(transaction, error: error as NSError) }
+            }
+        }
     }
 
     func reply(_ token: UInt32, payload: Data? = nil, code: UInt16 = 0x2001, error: NSError? = nil) {
@@ -194,7 +231,9 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(try destination.save(Data([42]), to: selected[0].path))
         let report = await exportPhotos(selected, destination: destination, read: CameraReader(source: source).read) { _ in }
         XCTAssertNil(report.failure)
-        XCTAssertEqual(report.skipped, 1)
+        XCTAssertEqual(report.skipped, 0)
+        XCTAssertEqual(report.conflicts.count, 1)
+        XCTAssertTrue(report.conflicts[0].contains(selected[0].path.joined(separator: "/")))
         XCTAssertEqual(report.written, 1)
         XCTAssertEqual(source.reads, [209])
         XCTAssertEqual(try Data(contentsOf: destination.root.appendingPathComponent(selected[0].path.joined(separator: "/"))), Data([42]))
@@ -350,7 +389,9 @@ final class ExportTests: XCTestCase {
         try sentinel.write(to: existing)
         let second = await exportPhotos(items, destination: destination, read: CameraReader(source: source).read) { _ in }
         XCTAssertNil(second.failure)
-        XCTAssertEqual(second.skipped, 6)
+        XCTAssertEqual(second.skipped, 5)
+        XCTAssertEqual(second.conflicts.count, 1)
+        XCTAssertEqual(second.processed, 6)
         XCTAssertEqual(second.written, 0)
         XCTAssertEqual(try Data(contentsOf: existing), sentinel)
         XCTAssertEqual(source.reads.count, 6)
@@ -459,6 +500,10 @@ final class ExportTests: XCTestCase {
         XCTAssertNil(try empty(0x00010001, sd.label).reportedSlot)
         XCTAssertNil(try empty(sd.id, "SD").reportedSlot)
         XCTAssertNil(try empty(sd.id, "NIKON Z 8   [Slot 2] COPY").reportedSlot)
+        var known = Catalog(stores: [sd])
+        XCTAssertThrowsError(try known.confirm(.one, for: sd.id))
+        XCTAssertThrowsError(try known.confirm(nil, for: sd.id))
+        XCTAssertEqual(known.slots[sd.id], .two)
     }
 
     @MainActor func testUnreadableCardInEitherPositionKeepsHealthyCardExportable() async throws {
@@ -577,6 +622,11 @@ final class ExportTests: XCTestCase {
         for systemTimeout in [false, true] {
             let device = DeferredUSBDevice()
             let source = USBSource(camera: device, timeoutNanoseconds: 50_000_000)
+            var failures = 0
+            source.onSessionFailure = { [weak source] failed, _ in
+                XCTAssertTrue(failed === source)
+                failures += 1
+            }
             if systemTimeout {
                 device.onSend = { [weak device] token in
                     device?.reply(token, code: 0x2013, error: NSError(domain: ICErrorDomain,
@@ -591,6 +641,7 @@ final class ExportTests: XCTestCase {
                 device.reply(1, payload: Data([99]))
             }
             XCTAssertEqual(device.tokens, [1])
+            XCTAssertEqual(failures, 1)
         }
     }
 
@@ -628,5 +679,91 @@ final class ExportTests: XCTestCase {
         XCTAssertThrowsError(try PTPBytes.checkResponse(Data([12,0,0,0,3,0,2,32,7,0,0,0]), to: .object))
         XCTAssertThrowsError(try PTPBytes.object(Data(count: 51), id: 1))
         XCTAssertThrowsError(try PTPBytes.identifiers(Data([1,0,0,0])))
+    }
+
+    @MainActor func testDestinationCreatedDuringReadIsReportedAsConflict() async throws {
+        let source = CameraFixture()
+        let item = try await source.confirmedCatalog().plan(.card(.one))[0]
+        let destination = Destination(root: try temporaryFolder())
+        let result = await exportPhotos([item], destination: destination, read: { _ in
+            XCTAssertTrue(try destination.save(Data([7]), to: item.path))
+            return source.payload(item.entry.id)
+        }, progress: { _ in })
+        XCTAssertEqual(result.conflicts.count, 1)
+        XCTAssertEqual(result.written + result.skipped, 0)
+        let url = destination.root.appendingPathComponent(item.path.joined(separator: "/"))
+        XCTAssertEqual(try Data(contentsOf: url), Data([7]))
+    }
+
+    func testQueuedEventsIncludeMediaChangesAndRejectTruncation() throws {
+        let prop: [UInt8] = [6, 64, 1, 0, 1, 0, 0, 0]
+        for code: UInt8 in [2, 3, 4, 5, 7, 12] {
+            let bytes = Data([2, 0, 0, 0] + prop + [code, 64, 1, 0, 42, 0, 0, 0])
+            let change = try CatalogEvent.firstChange(in: bytes)
+            XCTAssertEqual(change, CatalogEvent(code: 0x4000 + UInt16(code), parameter: 42))
+            XCTAssertThrowsError(try CatalogEvent.firstChange(in: bytes.dropLast()))
+        }
+        XCTAssertNil(try CatalogEvent.firstChange(in: Data([1, 0, 0, 0] + prop)))
+        XCTAssertNil(try CatalogEvent.firstChange(in: Data(count: 4)))
+        XCTAssertThrowsError(try CatalogEvent.firstChange(in: Data(count: 5)))
+    }
+
+    @MainActor func testBatchScanMatchesIndividualReadsAndFallsBackOnInvalidCoverage() async throws {
+        let source = CameraFixture()
+        source.present = [source.cf]
+        source.files[280] = CameraObject(id: 280, storage: source.cf, parent: 0, format: 0x3001,
+                                         name: "OTHER", size: 0)
+        for id: UInt32 in 300..<345 {
+            source.files[id] = CameraObject(id: id, storage: source.cf, parent: id.isMultiple(of: 2) ? 202 : 280, format: 0x3801,
+                                            name: "照片\(id).JPG", size: id)
+        }
+        let reader = CameraReader(source: source)
+        let fast = try await reader.scan { _ in }.stores[0]
+        XCTAssertEqual(source.commands.filter { $0 == .objectPropList }.count, 10)
+        XCTAssertFalse(source.commands.contains(.objectInfo))
+        for rejected in [false, true] {
+            source.commands.removeAll()
+            source.intercept = { command, _ in
+                guard command == .objectPropList else { return nil }
+                if rejected { throw PTPResponseError(command: command, code: 0x2005) }
+                return Data(count: 4)
+            }
+            let fallback = try await reader.scan { _ in }.stores[0]
+            XCTAssertTrue(source.commands.contains(.objectInfo))
+            XCTAssertEqual(fast.entries.map(\.object), fallback.entries.map(\.object))
+            XCTAssertEqual(fast.entries.map(\.path), fallback.entries.map(\.path))
+        }
+        source.commands.removeAll()
+        source.intercept = { command, _ in
+            if command == .objectPropList { throw PTPResponseError(command: command, code: 0x2003) }
+            return nil
+        }
+        do { _ = try await reader.scan { _ in }; XCTFail("Invalid session must abort") }
+        catch { XCTAssertEqual((error as? PTPResponseError)?.code, 0x2003) }
+        XCTAssertFalse(source.commands.contains(.objectInfo))
+    }
+
+    @MainActor func testModelRevokesDisplayedCatalogAfterPreviewTimeout() async throws {
+        let fixture = CameraFixture()
+        let device = DeferredUSBDevice()
+        device.responder = fixture
+        let model = CameraModel()
+        try await model.readCatalog(with: USBSource(camera: device),
+                                    sdkStores: fixture.present.map { SDKStorageRecord(id: $0, error: nil) })
+        model.confirm(.two, id: fixture.sd)
+        XCTAssertTrue(model.connected)
+        let item = try XCTUnwrap(model.catalog.plan(.card(.two)).first)
+        fixture.intercept = { command, _ in
+            if command == .thumbnail { throw URLError(.timedOut) }
+            return nil
+        }
+        do { _ = try await model.thumbnail(for: item.entry); XCTFail("Expected timeout") }
+        catch {
+            XCTAssertFalse(model.connected)
+            XCTAssertTrue(model.catalog.stores.isEmpty)
+            XCTAssertTrue(model.catalog.slots.isEmpty)
+            XCTAssertTrue(model.status.contains("刷新"))
+            XCTAssertTrue(model.canRefresh)
+        }
     }
 }
