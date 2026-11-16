@@ -272,7 +272,7 @@ final class CameraModel: NSObject, ObservableObject, ICDeviceBrowserDelegate {
             source?.invalidate(ExportError(message))
             clearCatalog(message)
         } else {
-            clearCatalog("相机内容或存储信息已变化，请刷新并重新核对卡槽。")
+            clearCatalog("相机内容或存储信息已变化，请刷新目录。")
         }
     }
 

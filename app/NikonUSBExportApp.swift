@@ -15,18 +15,12 @@ struct NikonUSBExportApp: App {
     }
 }
 
-private struct SlotConfirmation: Identifiable {
-    let id: UInt32
-    let slot: Slot
-}
-
 private struct ExportWindow: View {
     @ObservedObject var model: CameraModel
     @State private var selected: UInt32?
     @State private var folders = [Entry]()
     @State private var photoIDs = Set<UInt32>()
     @AppStorage("showPhotoThumbnails") private var showThumbnails = false
-    @State private var confirmation: SlotConfirmation?
 
     private var store: Storage? { model.catalog.stores.first { $0.id == selected } }
     private var parentID: UInt32 { folders.last?.id ?? 0 }
@@ -50,7 +44,7 @@ private struct ExportWindow: View {
             ToolbarItem {
                 Button {
                     let assignments = model.catalog.stores.map { store in
-                        store.hexID + " → " + (model.catalog.slots[store.id]?.title ?? "卡槽待确认")
+                        store.hexID + " → " + (model.catalog.slots[store.id]?.title ?? "卡槽未识别")
                     }
                     NSPasteboard.general.clearContents()
                     let notes = model.scanNotes + [model.thumbnailReadNote].compactMap { $0 }
@@ -67,12 +61,6 @@ private struct ExportWindow: View {
         .onChange(of: model.catalog.stores.map(\.id)) { _, ids in
             selectStore(ids.first)
         }
-        .alert(item: $confirmation) { choice in
-            Alert(title: Text("确认物理卡槽"),
-                  message: Text("请在机身回放中核对目录和照片，或确认机身仅装这一张卡。将当前存储关联到\(choice.slot.title)（\(choice.slot.medium)），仅对此次读取有效。"),
-                  primaryButton: .default(Text("确认关联")) { model.confirm(choice.slot, id: choice.id) },
-                  secondaryButton: .cancel(Text("取消")))
-        }
     }
 
     private var sidebar: some View {
@@ -80,7 +68,7 @@ private struct ExportWindow: View {
             Label("相机存储", systemImage: "camera").font(.headline).padding(.horizontal)
             List(model.catalog.stores, selection: Binding(get: { selected }, set: selectStore)) { storage in
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(model.catalog.slots[storage.id]?.title ?? "待确认卡槽", systemImage: "sdcard")
+                    Label(model.catalog.slots[storage.id]?.title ?? "卡槽未识别", systemImage: "sdcard")
                         .font(.headline)
                     Text(storage.hexID).font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
@@ -112,29 +100,15 @@ private struct ExportWindow: View {
         if let store {
             let slot = model.catalog.slots[store.id]
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(slot.map { "\($0.title) · \($0.medium)" } ?? "待确认卡槽").font(.title2.bold())
-                        if let slot {
-                            Text(store.reportedSlot == slot ? "相机卷标与存储标识一致" : "已人工核对")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Text([store.description, store.label, store.hexID, bytes(Int64(clamping: store.capacity))]
-                            .filter { !$0.isEmpty }.joined(separator: "  ·  "))
-                            .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(slot.map { "\($0.title) · \($0.medium)" } ?? "卡槽未识别").font(.title2.bold())
+                    if slot == nil {
+                        Text("当前只能浏览这张卡。点“刷新目录”重新识别卡槽。")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    if store.reportedSlot == nil {
-                        Menu(slot == nil ? "核对卡槽" : "更改关联") {
-                            ForEach(Slot.allCases) { choice in
-                                Button("\(choice.title) · \(choice.medium)") {
-                                    confirmation = SlotConfirmation(id: store.id, slot: choice)
-                                }
-                                .disabled(model.catalog.slots.values.contains(choice) || model.catalog.failedStores.contains { $0.slot == choice })
-                            }
-                            if slot != nil { Button("解除关联") { model.confirm(nil, id: store.id) } }
-                        }.fixedSize().disabled(model.exporting)
-                    }
+                    Text([store.description, store.label, store.hexID, bytes(Int64(clamping: store.capacity))]
+                        .filter { !$0.isEmpty }.joined(separator: "  ·  "))
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 }.padding([.horizontal, .top], 18)
                 HStack {
                     Button {
@@ -197,7 +171,6 @@ private struct ExportWindow: View {
         let initial = model.catalog.stores.first { $0.id == id }?.initialFolder
         folders = initial.map { [$0] } ?? []
         photoIDs.removeAll()
-        confirmation = nil
     }
 
     private var controls: some View {
