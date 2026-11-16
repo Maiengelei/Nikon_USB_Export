@@ -6,6 +6,8 @@ xcuserdata/
 *.xcarchive/
 Nikon-USB-Export-macOS-*-local.zip
 Nikon-USB-Export-macOS-*-local.zip.sha256
+Nikon_USB_Export_macOS_*_local.zip
+Nikon_USB_Export_macOS_*_local.zip.sha256
 *.xcresult/
 /.build/
 /.swiftpm/

@@ -96,14 +96,14 @@
 		000000000000000000000048 = {isa = PBXGroup; path = tools; children = (000000000000000000000049,); sourceTree = "<group>"; };
 		000000000000000000000049 = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "prepare-nikon-sdk.sh"; sourceTree = "<group>"; };
 		000000000000000000000002 = {isa = PBXGroup; children = (000000000000000000000047, 000000000000000000000003, 000000000000000000000004, 000000000000000000000048, 000000000000000000000005,); sourceTree = "<group>"; };
-		000000000000000000000008 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nikon USB Export.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		000000000000000000000009 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NikonUSBExportTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		000000000000000000000017 = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001; proxyType = 1; remoteGlobalIDString = 000000000000000000000006; remoteInfo = NikonUSBExport; };
+		000000000000000000000008 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nikon_USB_Export.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000009 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Nikon_USB_Export_Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000017 = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001; proxyType = 1; remoteGlobalIDString = 000000000000000000000006; remoteInfo = Nikon_USB_Export; };
 		000000000000000000000018 = {isa = PBXTargetDependency; target = 000000000000000000000006; targetProxy = 000000000000000000000017; };
 		000000000000000000000019 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000037,000000000000000000000051,  000000000000000000000039, 00000000000000000000000C, 00000000000000000000000E, 000000000000000000000010, 000000000000000000000012, 000000000000000000000014,); runOnlyForDeploymentPostprocessing = 0; };
 		00000000000000000000001B = {isa = XCBuildConfiguration; buildSettings = {
 			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8Export";
-			PRODUCT_NAME = "Nikon USB Export";
+			PRODUCT_NAME = "$(TARGET_NAME)";
 			PRODUCT_MODULE_NAME = NikonUSBExport;
 			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			ENABLE_HARDENED_RUNTIME = YES;
@@ -115,7 +115,7 @@
 		}; name = Debug; };
 		00000000000000000000001C = {isa = XCBuildConfiguration; buildSettings = {
 			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8Export";
-			PRODUCT_NAME = "Nikon USB Export";
+			PRODUCT_NAME = "$(TARGET_NAME)";
 			PRODUCT_MODULE_NAME = NikonUSBExport;
 			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			ENABLE_HARDENED_RUNTIME = YES;
@@ -126,32 +126,32 @@
 			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 		}; name = Release; };
 		00000000000000000000001A = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000001B, 00000000000000000000001C,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		000000000000000000000006 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001A; buildPhases = (000000000000000000000019, 000000000000000000000026, 00000000000000000000003F, ); buildRules = (); dependencies = (000000000000000000000046, ); name = NikonUSBExport; productName = NikonUSBExport; productReference = 000000000000000000000008; productType = "com.apple.product-type.application"; };
+		000000000000000000000006 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001A; buildPhases = (000000000000000000000019, 000000000000000000000026, 00000000000000000000003F, ); buildRules = (); dependencies = (000000000000000000000046, ); name = Nikon_USB_Export; productName = Nikon_USB_Export; productReference = 000000000000000000000008; productType = "com.apple.product-type.application"; };
 		00000000000000000000001D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000016,000000000000000000000054, ); runOnlyForDeploymentPostprocessing = 0; };
 		00000000000000000000001F = {isa = XCBuildConfiguration; buildSettings = {
 			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8ExportTests";
-			PRODUCT_NAME = "NikonUSBExportTests";
+			PRODUCT_NAME = "$(TARGET_NAME)";
 			GENERATE_INFOPLIST_FILE = "YES";
 			MACOSX_DEPLOYMENT_TARGET = 14.0;
 			BUNDLE_LOADER = "$(TEST_HOST)";
-			TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nikon USB Export.app/Contents/MacOS/Nikon USB Export";
+			TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nikon_USB_Export.app/Contents/MacOS/Nikon_USB_Export";
 			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 		}; name = Debug; };
 		000000000000000000000020 = {isa = XCBuildConfiguration; buildSettings = {
 			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8ExportTests";
-			PRODUCT_NAME = "NikonUSBExportTests";
+			PRODUCT_NAME = "$(TARGET_NAME)";
 			GENERATE_INFOPLIST_FILE = "YES";
 			MACOSX_DEPLOYMENT_TARGET = 14.0;
 			BUNDLE_LOADER = "$(TEST_HOST)";
-			TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nikon USB Export.app/Contents/MacOS/Nikon USB Export";
+			TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nikon_USB_Export.app/Contents/MacOS/Nikon_USB_Export";
 			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
 		}; name = Release; };
 		00000000000000000000001E = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000001F, 000000000000000000000020,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		000000000000000000000007 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001E; buildPhases = (00000000000000000000001D,); buildRules = (); dependencies = (000000000000000000000018,); name = NikonUSBExportTests; productName = NikonUSBExportTests; productReference = 000000000000000000000009; productType = "com.apple.product-type.bundle.unit-test"; };
+		000000000000000000000007 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001E; buildPhases = (00000000000000000000001D,); buildRules = (); dependencies = (000000000000000000000018,); name = Nikon_USB_Export_Tests; productName = Nikon_USB_Export_Tests; productReference = 000000000000000000000009; productType = "com.apple.product-type.bundle.unit-test"; };
 		000000000000000000000022 = {isa = XCBuildConfiguration; buildSettings = {
 			SDKROOT = "macosx";
 			MARKETING_VERSION = "1.0";
-			CURRENT_PROJECT_VERSION = "7";
+			CURRENT_PROJECT_VERSION = "8";
 			MACOSX_DEPLOYMENT_TARGET = "14.0";
 			SWIFT_VERSION = "5.0";
 			CLANG_ENABLE_MODULES = "YES";
@@ -164,7 +164,7 @@
 		000000000000000000000023 = {isa = XCBuildConfiguration; buildSettings = {
 			SDKROOT = "macosx";
 			MARKETING_VERSION = "1.0";
-			CURRENT_PROJECT_VERSION = "7";
+			CURRENT_PROJECT_VERSION = "8";
 			MACOSX_DEPLOYMENT_TARGET = "14.0";
 			SWIFT_VERSION = "5.0";
 			CLANG_ENABLE_MODULES = "YES";

@@ -12,11 +12,11 @@
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-xcodebuild -project NikonUSBExport.xcodeproj -scheme NikonUSBExport \
+xcodebuild -project Nikon_USB_Export.xcodeproj -scheme Nikon_USB_Export \
   -configuration Release -derivedDataPath build build
 ```
 
-产物位于 `build/Build/Products/Release/Nikon USB Export.app`。在 Xcode 中选择 `NikonUSBExport` scheme，按 ⌘U 运行测试。
+产物位于 `build/Build/Products/Release/Nikon_USB_Export.app`。在 Xcode 中选择 `Nikon_USB_Export` scheme，按 ⌘U 运行测试。
 
 ## 第三方组件
 
