@@ -1,4 +1,4 @@
-# Nikon USB Export 0.3.0（macOS）
+# Nikon USB Export 1.0（macOS）
 
 ## 功能
 
@@ -8,7 +8,7 @@
 
 ## 构建
 
-使用完整的 Xcode 构建，应用最低支持 macOS 14。将 SDK 原包放在 `Dependencies/NikonRemoteSDK/2.1.0/S-SDKZ-210BF-ALLIN.zip`，在仓库根目录执行以下命令。
+使用 Xcode 27.2 构建，应用最低支持 macOS 14。将 SDK 原包放在 `Dependencies/NikonRemoteSDK/2.1.0/S-SDKZ-210BF-ALLIN.zip`，在仓库根目录执行以下命令。
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer

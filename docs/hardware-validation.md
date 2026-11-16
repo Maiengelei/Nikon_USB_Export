@@ -1,5 +1,19 @@
 # Z8 双卡验收
 
+## macOS 1.0（构建 6）成品验收 · 2026-11-17
+
+在 Apple 芯片 Mac、macOS 27.2.1 和 Xcode 27.2 上，从 Release 归档制作 ZIP，解压至新目录后启动其中的应用。在应用窗口选择临时导出目录，从两张卡各预览并导出一张 NEF。导出文件与前一轮独立读取的 SHA-256 均相符。
+
+| 导出路径 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `卡1/DCIM/100GENOL/GEN_0432.NEF` | 49,515,569 | `a0395707d1ced665ff3d1233a5f957be993402254f0d9be17ac5aece1fb86831` |
+| `卡2/DCIM/100GENOL/GEN_0486.NEF` | 50,821,665 | `46ab5957ed38bd8aabd858c732d6dbfb8a07be153f593c80421ae59ce1305285` |
+
+- 两个卡槽可分别浏览，选择目标后双卡导出按钮可用。再次导出卡 2 的样本，应用报告写入 0 张、同名同长度跳过 1 张。
+- Mac 测试共 31 项，全部通过。主应用、XPC 服务及三个 Nikon 运行库都包含 arm64、x86_64。Intel 架构仅验证了构建和签名。
+- 主应用和 XPC 服务均为 1.0（6），最低 macOS 14。主应用含现代图标资源和兼容图标 `AppIcon.icns`，已查看 macOS 27 的 256 和 32 像素渲染。
+- 归档与解压副本均通过 `codesign --verify --deep --strict --all-architectures`。当前验收包使用 ad-hoc 签名，本机有效代码签名身份数为 0，`spctl --assess --type execute` 返回 `rejected`。公开分发还需 Developer ID 签名与 Apple 公证。
+
 ## 2026-11-16 实测
 
 在 Apple 芯片 Mac 上使用 macOS 27.2.1、Xcode 27.2 和 Nikon Remote SDK 2.1.0。测试经应用的相机发现、SDK 服务和 ImageCaptureCore 传输入口运行，样本写入应用的本机临时目录。
