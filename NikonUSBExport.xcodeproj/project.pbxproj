@@ -1,0 +1,180 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		000000000000000000000031 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NikonDiscovery.swift; sourceTree = "<group>"; };
+		000000000000000000000032 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NikonSDKClient.swift; sourceTree = "<group>"; };
+		000000000000000000000033 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		000000000000000000000034 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NikonSDKProfiles.swift; sourceTree = "<group>"; };
+		000000000000000000000035 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		000000000000000000000036 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NikonSDKService.entitlements; sourceTree = "<group>"; };
+		000000000000000000000037 = {isa = PBXBuildFile; fileRef = 000000000000000000000031; };
+		000000000000000000000038 = {isa = PBXBuildFile; fileRef = 000000000000000000000031; };
+		000000000000000000000039 = {isa = PBXBuildFile; fileRef = 000000000000000000000032; };
+		00000000000000000000003A = {isa = PBXBuildFile; fileRef = 000000000000000000000033; };
+		00000000000000000000003B = {isa = PBXBuildFile; fileRef = 000000000000000000000034; };
+		00000000000000000000003C = {isa = PBXGroup; path = NikonSDKService; children = (000000000000000000000033, 000000000000000000000034, 000000000000000000000035, 000000000000000000000036, ); sourceTree = "<group>"; };
+		00000000000000000000003D = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = NikonSDKService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		00000000000000000000003E = {isa = PBXBuildFile; fileRef = 00000000000000000000003D;  };
+		00000000000000000000003F = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = "Contents/XPCServices"; dstSubfolderSpec = 1; files = (00000000000000000000003E, ); name = "Embed XPC Services"; runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000040 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000028, 000000000000000000000038, 00000000000000000000003A, 00000000000000000000003B, ); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000041 = {isa = XCBuildConfiguration; buildSettings = {
+            PRODUCT_NAME = NikonSDKService;
+            PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8Export.NikonSDKService";
+            MARKETING_VERSION = "0.3.0";
+            CURRENT_PROJECT_VERSION = "5";
+            SKIP_INSTALL = YES;
+            ENABLE_HARDENED_RUNTIME = YES;
+            CODE_SIGN_ENTITLEMENTS = "app/NikonSDKService/NikonSDKService.entitlements";
+            INFOPLIST_FILE = "app/NikonSDKService/Info.plist";
+            CLANG_ENABLE_OBJC_ARC = YES;
+            CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+            SWIFT_OBJC_BRIDGING_HEADER = "src/NikonSDKBridge.h";
+            HEADER_SEARCH_PATHS = ("$(inherited)", "$(DERIVED_FILE_DIR)/NikonRemoteSDK/Module/Mac/HeaderFile",);
+            LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+        }; name = Debug; };
+		000000000000000000000042 = {isa = XCBuildConfiguration; buildSettings = {
+            PRODUCT_NAME = NikonSDKService;
+            PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8Export.NikonSDKService";
+            MARKETING_VERSION = "0.3.0";
+            CURRENT_PROJECT_VERSION = "5";
+            SKIP_INSTALL = YES;
+            ENABLE_HARDENED_RUNTIME = YES;
+            CODE_SIGN_ENTITLEMENTS = "app/NikonSDKService/NikonSDKService.entitlements";
+            INFOPLIST_FILE = "app/NikonSDKService/Info.plist";
+            CLANG_ENABLE_OBJC_ARC = YES;
+            CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+            SWIFT_OBJC_BRIDGING_HEADER = "src/NikonSDKBridge.h";
+            HEADER_SEARCH_PATHS = ("$(inherited)", "$(DERIVED_FILE_DIR)/NikonRemoteSDK/Module/Mac/HeaderFile",);
+            LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+        }; name = Release; };
+		000000000000000000000043 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000041, 000000000000000000000042, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		000000000000000000000044 = {isa = PBXNativeTarget; buildConfigurationList = 000000000000000000000043; buildPhases = (00000000000000000000002A, 000000000000000000000040, ); buildRules = (); dependencies = (); name = NikonSDKService; productName = NikonSDKService; productReference = 00000000000000000000003D; productType = "com.apple.product-type.xpc-service"; };
+		000000000000000000000045 = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001; proxyType = 1; remoteGlobalIDString = 000000000000000000000044; remoteInfo = NikonSDKService; };
+		000000000000000000000046 = {isa = PBXTargetDependency; target = 000000000000000000000044; targetProxy = 000000000000000000000045; };
+        000000000000000000000027 = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = NikonSDKBridge.mm; sourceTree = "<group>"; };
+        000000000000000000000028 = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
+        000000000000000000000029 = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NikonSDKBridge.h; sourceTree = "<group>"; };
+        00000000000000000000002A = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647;
+            name = "Prepare Nikon Remote SDK"; files = ();
+            inputPaths = ("$(SRCROOT)/tools/prepare-nikon-sdk.sh", "$(SRCROOT)/Dependencies/NikonRemoteSDK/2.1.0/S-SDKZ-210BF-ALLIN.zip",);
+            outputPaths = (
+                "$(DERIVED_FILE_DIR)/NikonRemoteSDK/Module/Mac/HeaderFile/Maid3.h",
+                "$(DERIVED_FILE_DIR)/NikonRemoteSDK/Module/Mac/HeaderFile/Maid3d1.h",
+                "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/TypeCommon Module.bundle",
+                "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/libNkPTPDriver2.dylib",
+                "$(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/Royalmile.framework",
+                "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NikonProfiles/DC_PTP_Config.config",
+                "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NikonProfiles/MaidLayer.config",
+                "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NikonProfiles/RangeValue.config",
+            );
+            runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "/bin/sh \"$SRCROOT/tools/prepare-nikon-sdk.sh\""; };
+
+		000000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000025 = {isa = PBXBuildFile; fileRef = 000000000000000000000024; };
+		000000000000000000000026 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000025,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
+		00000000000000000000000C = {isa = PBXBuildFile; fileRef = 00000000000000000000000B; };
+		00000000000000000000000D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTP.swift; sourceTree = "<group>"; };
+		00000000000000000000000E = {isa = PBXBuildFile; fileRef = 00000000000000000000000D; };
+		00000000000000000000000F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Export.swift; sourceTree = "<group>"; };
+		000000000000000000000010 = {isa = PBXBuildFile; fileRef = 00000000000000000000000F; };
+		000000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USB.swift; sourceTree = "<group>"; };
+		000000000000000000000012 = {isa = PBXBuildFile; fileRef = 000000000000000000000011; };
+		000000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NikonUSBExportApp.swift; sourceTree = "<group>"; };
+		000000000000000000000014 = {isa = PBXBuildFile; fileRef = 000000000000000000000013; };
+		000000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportTests.swift; sourceTree = "<group>"; };
+		000000000000000000000016 = {isa = PBXBuildFile; fileRef = 000000000000000000000015; };
+		00000000000000000000000A = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NikonUSBExport.entitlements; sourceTree = "<group>"; };
+		000000000000000000000003 = {isa = PBXGroup; path = src; children = (000000000000000000000031, 000000000000000000000032, 000000000000000000000027, 000000000000000000000029, 00000000000000000000000B, 00000000000000000000000D, 00000000000000000000000F, 000000000000000000000011,); sourceTree = "<group>"; };
+		000000000000000000000004 = {isa = PBXGroup; path = tests; children = (000000000000000000000015,); sourceTree = "<group>"; };
+		000000000000000000000005 = {isa = PBXGroup; name = Products; children = (00000000000000000000003D, 000000000000000000000008, 000000000000000000000009,); sourceTree = "<group>"; };
+		000000000000000000000047 = {isa = PBXGroup; path = app; children = (000000000000000000000013, 000000000000000000000024, 00000000000000000000000A, 00000000000000000000003C,); sourceTree = "<group>"; };
+		000000000000000000000048 = {isa = PBXGroup; path = tools; children = (000000000000000000000049,); sourceTree = "<group>"; };
+		000000000000000000000049 = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "prepare-nikon-sdk.sh"; sourceTree = "<group>"; };
+		000000000000000000000002 = {isa = PBXGroup; children = (000000000000000000000047, 000000000000000000000003, 000000000000000000000004, 000000000000000000000048, 000000000000000000000005,); sourceTree = "<group>"; };
+		000000000000000000000008 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nikon USB Export.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000009 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NikonUSBExportTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000017 = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001; proxyType = 1; remoteGlobalIDString = 000000000000000000000006; remoteInfo = NikonUSBExport; };
+		000000000000000000000018 = {isa = PBXTargetDependency; target = 000000000000000000000006; targetProxy = 000000000000000000000017; };
+		000000000000000000000019 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000037, 000000000000000000000039, 00000000000000000000000C, 00000000000000000000000E, 000000000000000000000010, 000000000000000000000012, 000000000000000000000014,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000001B = {isa = XCBuildConfiguration; buildSettings = {
+			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8Export";
+			PRODUCT_NAME = "Nikon USB Export";
+			PRODUCT_MODULE_NAME = NikonUSBExport;
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			MARKETING_VERSION = "0.3.0";
+			CURRENT_PROJECT_VERSION = "5";
+			ENABLE_HARDENED_RUNTIME = YES;
+			CODE_SIGN_ENTITLEMENTS = "app/NikonUSBExport.entitlements";
+			GENERATE_INFOPLIST_FILE = "YES";
+			INFOPLIST_KEY_NSCameraUsageDescription = "通过 USB 读取 Nikon Z8 的存储卡、目录和照片。";
+			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
+			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+		}; name = Debug; };
+		00000000000000000000001C = {isa = XCBuildConfiguration; buildSettings = {
+			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8Export";
+			PRODUCT_NAME = "Nikon USB Export";
+			PRODUCT_MODULE_NAME = NikonUSBExport;
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			MARKETING_VERSION = "0.3.0";
+			CURRENT_PROJECT_VERSION = "5";
+			ENABLE_HARDENED_RUNTIME = YES;
+			CODE_SIGN_ENTITLEMENTS = "app/NikonUSBExport.entitlements";
+			GENERATE_INFOPLIST_FILE = "YES";
+			INFOPLIST_KEY_NSCameraUsageDescription = "通过 USB 读取 Nikon Z8 的存储卡、目录和照片。";
+			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.photography";
+			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+		}; name = Release; };
+		00000000000000000000001A = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000001B, 00000000000000000000001C,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		000000000000000000000006 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001A; buildPhases = (000000000000000000000019, 000000000000000000000026, 00000000000000000000003F, ); buildRules = (); dependencies = (000000000000000000000046, ); name = NikonUSBExport; productName = NikonUSBExport; productReference = 000000000000000000000008; productType = "com.apple.product-type.application"; };
+		00000000000000000000001D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000016,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000001F = {isa = XCBuildConfiguration; buildSettings = {
+			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8ExportTests";
+			PRODUCT_NAME = "NikonUSBExportTests";
+			GENERATE_INFOPLIST_FILE = "YES";
+			MACOSX_DEPLOYMENT_TARGET = 14.0;
+			BUNDLE_LOADER = "$(TEST_HOST)";
+			TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nikon USB Export.app/Contents/MacOS/Nikon USB Export";
+			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
+		}; name = Debug; };
+		000000000000000000000020 = {isa = XCBuildConfiguration; buildSettings = {
+			PRODUCT_BUNDLE_IDENTIFIER = "local.cameratools.Z8ExportTests";
+			PRODUCT_NAME = "NikonUSBExportTests";
+			GENERATE_INFOPLIST_FILE = "YES";
+			MACOSX_DEPLOYMENT_TARGET = 14.0;
+			BUNDLE_LOADER = "$(TEST_HOST)";
+			TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nikon USB Export.app/Contents/MacOS/Nikon USB Export";
+			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks";
+		}; name = Release; };
+		00000000000000000000001E = {isa = XCConfigurationList; buildConfigurations = (00000000000000000000001F, 000000000000000000000020,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		000000000000000000000007 = {isa = PBXNativeTarget; buildConfigurationList = 00000000000000000000001E; buildPhases = (00000000000000000000001D,); buildRules = (); dependencies = (000000000000000000000018,); name = NikonUSBExportTests; productName = NikonUSBExportTests; productReference = 000000000000000000000009; productType = "com.apple.product-type.bundle.unit-test"; };
+		000000000000000000000022 = {isa = XCBuildConfiguration; buildSettings = {
+			SDKROOT = "macosx";
+			MACOSX_DEPLOYMENT_TARGET = "14.0";
+			SWIFT_VERSION = "5.0";
+			CLANG_ENABLE_MODULES = "YES";
+			SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			ENABLE_TESTABILITY = "YES";
+			DEBUG_INFORMATION_FORMAT = "dwarf";
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
+			CODE_SIGN_IDENTITY = "-";
+		}; name = Debug; };
+		000000000000000000000023 = {isa = XCBuildConfiguration; buildSettings = {
+			SDKROOT = "macosx";
+			MACOSX_DEPLOYMENT_TARGET = "14.0";
+			SWIFT_VERSION = "5.0";
+			CLANG_ENABLE_MODULES = "YES";
+			SWIFT_OPTIMIZATION_LEVEL = "-O";
+			ENABLE_TESTABILITY = "NO";
+			DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+			CODE_SIGN_IDENTITY = "-";
+		}; name = Release; };
+		000000000000000000000021 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000022, 000000000000000000000023,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		000000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; }; buildConfigurationList = 000000000000000000000021; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000005; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000044, 000000000000000000000006, 000000000000000000000007,); };
+	};
+	rootObject = 000000000000000000000001;
+}
