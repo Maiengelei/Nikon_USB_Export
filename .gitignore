@@ -2,7 +2,10 @@
 xcuserdata/
 /build/
 /DerivedData/
-/Dependencies/NikonRemoteSDK/**/*.zip
+/Dependencies/NikonRemoteSDK/
+*.xcarchive/
+Nikon-USB-Export-macOS-*-local.zip
+Nikon-USB-Export-macOS-*-local.zip.sha256
 *.xcresult/
 /.build/
 /.swiftpm/
